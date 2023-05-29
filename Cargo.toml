@@ -5,11 +5,15 @@ edition = "2021"
 authors = [
     "Seth <seth@gmail.com>",
 ]
+description = "A kv store base on memory"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "4.3.0"
+clap = { version = "4.3.0", features = [
+    "derive",
+    "env",
+] }
 
 [dev-dependencies]
 assert_cmd = "2.0.11"
