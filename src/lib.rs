@@ -4,7 +4,7 @@
 mod error;
 mod kv;
 
-pub use error::Result;
+pub use error::{Result, KvsError};
 pub use kv::KvStore;
 
 pub fn do_sth() {}
