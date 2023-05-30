@@ -1,5 +1,3 @@
-use std::process::exit;
-
 use clap::Parser;
 
 #[derive(Parser)]
@@ -41,19 +39,20 @@ pub struct RmArgs {
 }
 
 fn main() {
+    use std::process;
     let opts = Opts::parse();
     match opts {
         Opts::Get(_args) => {
             eprintln!("unimplemented");
-            exit(-1);
+            process::exit(-1);
         }
         Opts::Set(_args) => {
             eprintln!("unimplemented");
-            exit(-1);
+            process::exit(-1);
         }
         Opts::Remove(_args) => {
             eprintln!("unimplemented");
-            exit(-1);
+            process::exit(-1);
         }
     }
 }
