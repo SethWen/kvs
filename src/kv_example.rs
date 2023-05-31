@@ -4,7 +4,7 @@ use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::{, SerialDeserializeize};
 use serde_json::Deserializer;
 
 use crate::{KvsError, Result};
