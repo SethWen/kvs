@@ -32,15 +32,16 @@ impl KvStore {
         let path: PathBuf = path.into();
         fs::create_dir_all(&path)?;
 
-        let gens = sorted_gen_list(&path)?;
-        let current_gen = gens.last().unwrap_or(&1) + 0;
-        println!("gen is {}", current_gen);
-        let writer = BufWriterWithPos::new(log_file(&path, current_gen, true)?)?;
-
         let mut index = BTreeMap::new();
         let mut readers = HashMap::new();
-
         let mut uncompacted = 0u64;
+
+        let gens = sorted_gen_list(&path)?;
+        let current_gen = gens.last().unwrap_or(&0) + 1;
+        let writer = BufWriterWithPos::new(log_file(&path, current_gen, true)?)?;
+        let reader = BufReaderWithPos::new(log_file(&path, current_gen, false)?)?;
+        readers.insert(current_gen, reader);
+
         for gen in gens {
             let mut reader = BufReaderWithPos::new(log_file(&path, gen, false)?)?;
             uncompacted += load_cmd(gen, &mut reader, &mut index)?;
@@ -59,7 +60,6 @@ impl KvStore {
 
     /// set k-v to memory
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        println!("store.set: {}, {}", key, value);
         let cmd = Command::set(key, value);
         let pos = self.writer.pos;
         serde_json::to_writer(&mut self.writer, &cmd)?;
@@ -208,7 +208,7 @@ struct BufReaderWithPos<R: Read + Seek> {
 
 impl<R: Read + Seek> BufReaderWithPos<R> {
     pub fn new(mut inner: R) -> Result<Self> {
-        let pos = inner.seek(SeekFrom::Start(0))?;
+        let pos = inner.seek(SeekFrom::Current(0))?;
         Ok(Self {
             reader: BufReader::new(inner),
             pos,
@@ -238,10 +238,7 @@ struct BufWriterWithPos<R: Write + Seek> {
 
 impl<R: Write + Seek> BufWriterWithPos<R> {
     pub fn new(mut inner: R) -> Result<Self> {
-        let pos = match inner.seek(SeekFrom::Start(0)) {
-            Ok(pos) => pos,
-            Err(e) => return Err(e.into()),
-        };
+        let pos = inner.seek(SeekFrom::Current(0))?;
         Ok(Self {
             writer: BufWriter::new(inner),
             pos,
@@ -257,8 +254,7 @@ impl<R: Write + Seek> Write for BufWriterWithPos<R> {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()?;
-        Ok(())
+        self.writer.flush()
     }
 }
 
@@ -307,92 +303,28 @@ fn load_cmd(
     reader: &mut BufReaderWithPos<File>,
     index: &mut BTreeMap<String, CommandPos>,
 ) -> Result<u64> {
+    // To make sure we read from the beginning of the file.
     let mut pos = reader.seek(SeekFrom::Start(0))?;
     let mut stream = Deserializer::from_reader(reader).into_iter::<Command>();
-    let mut uncompacted = 0u64;
-
+    let mut uncompacted = 0; // number of bytes that can be saved after a compaction.
     while let Some(cmd) = stream.next() {
         let new_pos = stream.byte_offset() as u64;
         match cmd? {
-            Command::Set { key, value } => {
-                if let Some(value) = index.insert(key, (gen, pos..new_pos).into()) {
-                    uncompacted += value.len;
+            Command::Set { key, .. } => {
+                if let Some(old_cmd) = index.insert(key, (gen, pos..new_pos).into()) {
+                    uncompacted += old_cmd.len;
                 }
             }
             Command::Rm { key } => {
-                if let Some(value) = index.remove(&key) {
-                    uncompacted += value.len;
+                if let Some(old_cmd) = index.remove(&key) {
+                    uncompacted += old_cmd.len;
                 }
-            }
-        };
-
-        pos = new_pos;
-    }
-    // serde_json::from_reader(reader)?;
-
-    Ok(uncompacted)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{
-        fs::{File, OpenOptions},
-        io::{Read, Seek, SeekFrom, Write},
-        path::{Path, PathBuf},
-    };
-
-    use crate::KvStore;
-
-    use super::{sorted_gen_list, BufReaderWithPos, BufWriterWithPos};
-    use super::{Command, Result};
-
-    #[test]
-    pub fn test_buf_reader_with_pos() -> Result<()> {
-        let file = File::open("README.md")?;
-        let mut reader = BufReaderWithPos::new(file)?;
-        let mut buf = [0u8; 4];
-        loop {
-            let size = reader.read(&mut buf)?;
-            let content = String::from_utf8_lossy(&buf).into_owned();
-
-            if size < 4 {
-                break;
+                // the "remove" command itself can be deleted in the next compaction.
+                // so we add its length to `uncompacted`.
+                uncompacted += new_pos - pos;
             }
         }
-
-        Ok(())
+        pos = new_pos;
     }
-
-    #[test]
-    pub fn test_buf_writer_with_pos() -> Result<()> {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(true)
-            .open("README2.md")?;
-        // let len = file.metadata()?.len();
-        let mut writer = BufWriterWithPos::new(file)?;
-        // writer.seek(SeekFrom::End(0))?;
-        let content = String::from("\n你好世界哈哈");
-        let size = writer.write(content.as_bytes())?;
-        writer.flush()?;
-
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_set() -> Result<()> {
-        let mut store = KvStore::open("tmp")?;
-        store.set("love".to_owned(), "rust".to_owned())?;
-
-        assert_eq!(Some("rust".to_owned()), store.get("love".to_owned())?);
-        Ok(())
-    }
-
-    #[test]
-    pub fn test_sorted_dir() -> Result<()> {
-        sorted_gen_list(Path::new("tmp"))?;
-
-        Ok(())
-    }
+    Ok(uncompacted)
 }

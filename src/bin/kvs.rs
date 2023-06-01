@@ -1,4 +1,7 @@
+use std::{env::current_dir, error::Error, process};
+
 use clap::Parser;
+use kvs::KvStore;
 
 #[derive(Parser)]
 #[command(
@@ -38,21 +41,31 @@ pub struct RmArgs {
     key: String,
 }
 
-fn main() {
-    use std::process;
+fn main() -> Result<(), Box<dyn Error>> {
     let opts = Opts::parse();
+    let store_dir = current_dir().unwrap();
+    let mut store = KvStore::open(store_dir).unwrap();
     match opts {
-        Opts::Get(_args) => {
-            eprintln!("unimplemented");
-            process::exit(-1);
+        Opts::Get(args) => {
+            match store.get(args.key)? {
+                Some(value) => println!("{value}"),
+                None => {
+                    println!("Key not found");
+                    process::exit(0);
+                }
+            };
         }
-        Opts::Set(_args) => {
-            eprintln!("unimplemented");
-            process::exit(-1);
+        Opts::Set(args) => {
+            store.set(args.key, args.value)?;
         }
-        Opts::Remove(_args) => {
-            eprintln!("unimplemented");
-            process::exit(-1);
-        }
+        Opts::Remove(args) => match store.remove(args.key) {
+            Ok(_) => {},
+            Err(kvs::KvsError::KeyNotFound) => {
+                println!("Key not found");
+                process::exit(-1);
+            }
+            _ => todo!(),
+        },
     }
+    Ok(())
 }
