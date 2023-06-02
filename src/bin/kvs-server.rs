@@ -1,8 +1,27 @@
-use std::{env, error::Error};
+use std::{env, error::Error, fs, net::SocketAddr};
 
-use clap::{command, Parser};
+use clap::{
+    builder::{IntoResettable, OsStr, Resettable},
+    command, Parser, ValueEnum,
+};
 
-#[derive(Parser)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, ValueEnum)]
+enum Engine {
+    kvs,
+    sled,
+}
+
+impl IntoResettable<OsStr> for Engine {
+    fn into_resettable(self) -> Resettable<OsStr> {
+        match self {
+            Engine::kvs => Resettable::Value("kvs".into()),
+            Engine::sled => Resettable::Value("slet".into()),
+        }
+    }
+}
+
+#[derive(Parser, Debug)]
 #[command(
     name = "kvs-server",
     bin_name = "kvs-server",
@@ -10,43 +29,38 @@ use clap::{command, Parser};
     version = env!("CARGO_PKG_VERSION"),
     about = env!("CARGO_PKG_DESCRIPTION"),
 )]
-pub enum Opts {
-    Get(GetArgs),
-    Set(SetArgs),
-    #[command(name = "rm")]
-    Remove(RmArgs),
-}
+pub struct Opts {
+    #[arg(
+        short,
+        long,
+        help = "Sets the listening address",
+        value_name = "IP:PORT",
+        default_value = "127.0.0.1:4000"
+    )]
+    addr: SocketAddr,
 
-#[derive(clap::Args)]
-#[command(about = "Get the string value of a given string key")]
-pub struct GetArgs {
-    #[arg(help = "A string key")]
-    key: String,
-}
-
-#[derive(clap::Args)]
-#[command(about = "Set the value of a string key to a string")]
-pub struct SetArgs {
-    #[arg(help = "A string key")]
-    key: String,
-    #[arg(help = "The string value of the key")]
-    value: String,
-}
-
-#[derive(clap::Args)]
-#[command(about = "Remove a given key")]
-pub struct RmArgs {
-    #[arg(help = "A string key")]
-    key: String,
+    #[arg(
+        short,
+        long,
+        help = "Sets the storage engine",
+        value_name = "ENGINE-NAME",
+        default_value = Engine::kvs,
+    )]
+    engine: Engine,
 }
 
 pub fn main() -> Result<(), Box<dyn Error>> {
     let opts = Opts::parse();
-    let _store_dir = env::current_dir().unwrap();
-    match opts {
-        Opts::Get(_args) => {}
-        Opts::Set(_args) => {}
-        Opts::Remove(_args) => {}
-    }
+    println!("opts: {:?}", opts);
+    eprintln!("kvs-server {}", env!("CARGO_PKG_VERSION"));
+    eprintln!("Storage engine: {:?}", opts.engine);
+    eprintln!("Listening on {}", opts.addr);
+
+    // write engine to engine file
+    fs::write(
+        env::current_dir()?.join("engine"),
+        format!("{:?}", opts.engine),
+    )?;
+    // let _store_dir = env::current_dir().unwrap();
     Ok(())
 }

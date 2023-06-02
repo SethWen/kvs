@@ -19,6 +19,12 @@ pub enum KvsError {
     /// It indicated a corrupted log or a program bug.
     #[error("unexpected command type")]
     UnexpectedCommandType,
+
+    #[error("{0}")]
+    Sled(#[from] sled::Error),
+
+    #[error("{0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 // impl From<io::Error> for KvsError {
