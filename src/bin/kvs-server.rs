@@ -12,6 +12,15 @@ enum Engine {
     sled,
 }
 
+impl ToString for Engine {
+    fn to_string(&self) -> String {
+        match *self {
+            Engine::kvs => "kvs".to_owned(),
+            Engine::sled => "sled".to_owned(),
+        }
+    }
+}
+
 impl IntoResettable<OsStr> for Engine {
     fn into_resettable(self) -> Resettable<OsStr> {
         match self {
@@ -56,11 +65,25 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     eprintln!("Storage engine: {:?}", opts.engine);
     eprintln!("Listening on {}", opts.addr);
 
-    // write engine to engine file
-    fs::write(
-        env::current_dir()?.join("engine"),
-        format!("{:?}", opts.engine),
-    )?;
-    // let _store_dir = env::current_dir().unwrap();
+    check_engine(&opts)?;
+    Ok(())
+}
+
+fn check_engine(opts: &Opts) -> Result<(), Box<dyn Error>> {
+    let engine_file = env::current_dir()?.join("engine");
+    let engine = fs::read_to_string(&engine_file);
+    match engine {
+        Ok(engine) => {
+            if engine != opts.engine.to_string() {
+                panic!("The engine before is {}", engine)
+            }
+        }
+        Err(e) => {
+            println!("engine file does not exist: {}", e);
+            // write engine to engine file
+            fs::write(&engine_file, format!("{:?}", opts.engine))?;
+        }
+    }
+
     Ok(())
 }
