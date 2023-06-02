@@ -4,6 +4,7 @@ use clap::{
     builder::{IntoResettable, OsStr, Resettable},
     command, Parser, ValueEnum,
 };
+use kvs::{KvStore, KvsEngine, Server, SledKvsEngine};
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, ValueEnum)]
@@ -66,6 +67,12 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     eprintln!("Listening on {}", opts.addr);
 
     check_engine(&opts)?;
+
+    let engine: Box<dyn KvsEngine> = match opts.engine {
+        Engine::kvs => Box::new(KvStore::open(env::current_dir()?)?),
+        Engine::sled => Box::new(SledKvsEngine::new(sled::open(env::current_dir()?)?)),
+    };
+    Server::new(engine, opts.addr).run()?;
     Ok(())
 }
 
@@ -79,7 +86,7 @@ fn check_engine(opts: &Opts) -> Result<(), Box<dyn Error>> {
             }
         }
         Err(e) => {
-            println!("engine file does not exist: {}", e);
+            println!("engine file does not exist: {}, create new file", e);
             // write engine to engine file
             fs::write(&engine_file, format!("{:?}", opts.engine))?;
         }
