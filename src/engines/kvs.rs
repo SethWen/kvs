@@ -104,7 +104,7 @@ impl KvStore {
     }
 }
 
-fn log_file(dir: &PathBuf, gen: u64, write: bool) -> io::Result<File> {
+fn log_file(dir: &Path, gen: u64, write: bool) -> io::Result<File> {
     let file = dir.join(format!("{gen}.x"));
     if write {
         OpenOptions::new()
@@ -150,7 +150,7 @@ struct BufReaderWithPos<R: Read + Seek> {
 
 impl<R: Read + Seek> BufReaderWithPos<R> {
     pub fn new(mut inner: R) -> Result<Self> {
-        let pos = inner.seek(SeekFrom::Current(0))?;
+        let pos = inner.stream_position()?;
         Ok(Self {
             reader: BufReader::new(inner),
             pos,
@@ -180,7 +180,7 @@ struct BufWriterWithPos<R: Write + Seek> {
 
 impl<R: Write + Seek> BufWriterWithPos<R> {
     pub fn new(mut inner: R) -> Result<Self> {
-        let pos = inner.seek(SeekFrom::Current(0))?;
+        let pos = inner.stream_position()?;
         Ok(Self {
             writer: BufWriter::new(inner),
             pos,

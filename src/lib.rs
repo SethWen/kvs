@@ -1,8 +1,8 @@
 // #![warn(missing_docs)]
 #![allow(unused_imports, unused_variables)]
 //! title is
-mod error;
 mod engines;
+mod error;
 
-pub use error::{Result, KvsError};
-pub use engines::{KvsEngine, KvStore, SledKvsEngine};
+pub use engines::{KvStore, KvsEngine, SledKvsEngine};
+pub use error::{KvsError, Result};
