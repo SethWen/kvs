@@ -1,7 +1,7 @@
 use std::{env::current_dir, error::Error, process};
 
 use clap::Parser;
-use kvs::KvStore;
+use kvs::{KvStore, KvsEngine};
 
 #[derive(Parser)]
 #[command(
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             store.set(args.key, args.value)?;
         }
         Opts::Remove(args) => match store.remove(args.key) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(kvs::KvsError::KeyNotFound) => {
                 println!("Key not found");
                 process::exit(-1);

@@ -13,6 +13,8 @@ use serde_json::Deserializer;
 
 use crate::error::{KvsError, Result};
 
+use super::KvsEngine;
+
 const COMPACTION_THRESHOLD: u64 = 1024 * 1024;
 
 /// kv store
@@ -56,66 +58,6 @@ impl KvStore {
             index,
             uncompacted,
         })
-    }
-
-    /// set k-v to memory
-    pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        let cmd = Command::set(key, value);
-        let pos = self.writer.pos;
-        serde_json::to_writer(&mut self.writer, &cmd)?;
-        self.writer.flush()?;
-
-        if let Command::Set { key, value } = cmd {
-            if let Some(old_cmd) = self
-                .index
-                .insert(key, (self.current_gen, pos..self.writer.pos).into())
-            {
-                self.uncompacted += old_cmd.len;
-            }
-        }
-
-        if self.uncompacted > COMPACTION_THRESHOLD {
-            self.compact()?;
-        }
-        Ok(())
-    }
-
-    ///
-    pub fn get(&mut self, key: String) -> Result<Option<String>> {
-        if let Some(cmd_pos) = self.index.get(&key) {
-            if let Some(reader) = self.readers.get_mut(&cmd_pos.gen) {
-                reader.seek(SeekFrom::Start(cmd_pos.pos))?;
-                let taker = reader.take(cmd_pos.len);
-                if let Command::Set { value, .. } = serde_json::from_reader(taker)? {
-                    Ok(Some(value))
-                } else {
-                    Err(KvsError::UnexpectedCommandType)
-                }
-            } else {
-                Err(KvsError::KeyNotFound)
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    ///
-    pub fn remove(&mut self, key: String) -> Result<()> {
-        let cmd = Command::rm(key);
-        let pos = self.writer.pos;
-        serde_json::to_writer(&mut self.writer, &cmd)?;
-        self.writer.flush()?;
-
-        if let Command::Rm { key } = cmd {
-            if let Some(value) = self.index.remove(&key) {
-                self.uncompacted += value.len;
-                Ok(())
-            } else {
-                Err(KvsError::KeyNotFound)
-            }
-        } else {
-            Err(KvsError::UnexpectedCommandType)
-        }
     }
 
     /// Clears stale entries in the log.
@@ -162,7 +104,7 @@ impl KvStore {
     }
 }
 
-fn log_file(dir: &PathBuf, gen: u64, write: bool) -> io::Result<File> {
+fn log_file(dir: &Path, gen: u64, write: bool) -> io::Result<File> {
     let file = dir.join(format!("{gen}.x"));
     if write {
         OpenOptions::new()
@@ -208,7 +150,7 @@ struct BufReaderWithPos<R: Read + Seek> {
 
 impl<R: Read + Seek> BufReaderWithPos<R> {
     pub fn new(mut inner: R) -> Result<Self> {
-        let pos = inner.seek(SeekFrom::Current(0))?;
+        let pos = inner.stream_position()?;
         Ok(Self {
             reader: BufReader::new(inner),
             pos,
@@ -238,7 +180,7 @@ struct BufWriterWithPos<R: Write + Seek> {
 
 impl<R: Write + Seek> BufWriterWithPos<R> {
     pub fn new(mut inner: R) -> Result<Self> {
-        let pos = inner.seek(SeekFrom::Current(0))?;
+        let pos = inner.stream_position()?;
         Ok(Self {
             writer: BufWriter::new(inner),
             pos,
@@ -327,4 +269,66 @@ fn load_cmd(
         pos = new_pos;
     }
     Ok(uncompacted)
+}
+
+impl KvsEngine for KvStore {
+    /// set k-v to memory
+    fn set(&mut self, key: String, value: String) -> Result<()> {
+        let cmd = Command::set(key, value);
+        let pos = self.writer.pos;
+        serde_json::to_writer(&mut self.writer, &cmd)?;
+        self.writer.flush()?;
+
+        if let Command::Set { key, value } = cmd {
+            if let Some(old_cmd) = self
+                .index
+                .insert(key, (self.current_gen, pos..self.writer.pos).into())
+            {
+                self.uncompacted += old_cmd.len;
+            }
+        }
+
+        if self.uncompacted > COMPACTION_THRESHOLD {
+            self.compact()?;
+        }
+        Ok(())
+    }
+
+    ///
+    fn get(&mut self, key: String) -> Result<Option<String>> {
+        if let Some(cmd_pos) = self.index.get(&key) {
+            if let Some(reader) = self.readers.get_mut(&cmd_pos.gen) {
+                reader.seek(SeekFrom::Start(cmd_pos.pos))?;
+                let taker = reader.take(cmd_pos.len);
+                if let Command::Set { value, .. } = serde_json::from_reader(taker)? {
+                    Ok(Some(value))
+                } else {
+                    Err(KvsError::UnexpectedCommandType)
+                }
+            } else {
+                Err(KvsError::KeyNotFound)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    ///
+    fn remove(&mut self, key: String) -> Result<()> {
+        let cmd = Command::rm(key);
+        let pos = self.writer.pos;
+        serde_json::to_writer(&mut self.writer, &cmd)?;
+        self.writer.flush()?;
+
+        if let Command::Rm { key } = cmd {
+            if let Some(value) = self.index.remove(&key) {
+                self.uncompacted += value.len;
+                Ok(())
+            } else {
+                Err(KvsError::KeyNotFound)
+            }
+        } else {
+            Err(KvsError::UnexpectedCommandType)
+        }
+    }
 }

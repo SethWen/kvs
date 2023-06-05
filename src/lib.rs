@@ -1,11 +1,14 @@
 // #![warn(missing_docs)]
 #![allow(unused_imports, unused_variables)]
 //! title is
+mod client;
+mod common;
+mod engines;
 mod error;
-mod kv;
-// mod kv_example;
+mod server;
 
-pub use error::{Result, KvsError};
-pub use kv::KvStore;
-
-pub fn do_sth() {}
+pub use client::Client;
+pub use common::*;
+pub use engines::{KvStore, KvsEngine, SledKvsEngine};
+pub use error::{KvsError, Result};
+pub use server::Server;
