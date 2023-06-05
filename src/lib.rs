@@ -6,6 +6,7 @@ mod common;
 mod engines;
 mod error;
 mod server;
+pub mod thread_pool;
 
 pub use client::Client;
 pub use common::*;
