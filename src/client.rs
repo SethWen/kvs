@@ -5,7 +5,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use serde_json::{de::IoRead, value::Serializer, Deserializer};
+use serde_json::{de::IoRead, Deserializer};
 
 use crate::{error::Result, GetResponse, KvsError, RemoveResponse, Request, SetResponse};
 
