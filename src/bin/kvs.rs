@@ -44,7 +44,7 @@ pub struct RmArgs {
 fn main() -> Result<(), Box<dyn Error>> {
     let opts = Opts::parse();
     let store_dir = current_dir().unwrap();
-    let mut store = KvStore::open(store_dir).unwrap();
+    let store = KvStore::open(store_dir).unwrap();
     match opts {
         Opts::Get(args) => {
             match store.get(args.key)? {
