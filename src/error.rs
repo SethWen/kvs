@@ -25,6 +25,9 @@ pub enum KvsError {
 
     #[error("{0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error("{0}")]
+    StringError(String),
 }
 
 // impl From<io::Error> for KvsError {
